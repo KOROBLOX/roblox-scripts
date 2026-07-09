@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Solara Fix",
+   Name = "⚔️ Kaiju Alpha Script | Farm Beta",
    LoadingTitle = "G-Cells Farm Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
@@ -159,7 +159,6 @@ FarmToggle = Tab:CreateToggle({
             if sharedRole == "Игрок 1 (Кому помогают)" then
                 
                 task.spawn(function()
-                    -- Ждем пока персонаж точно появится в папке Live
                     local char1 = nil
                     while farmActive and not char1 do
                         char1 = getCharacter(LocalPlayer.Name)
@@ -169,10 +168,9 @@ FarmToggle = Tab:CreateToggle({
                     local pHrp = char1:WaitForChild("HumanoidRootPart", 5)
                     if not pHrp then return end
                     
-                    -- === СИСТЕМА ЛИФТА (ПЛАВНЫЙ ПОДЪЕМ ДЛЯ РЕПЛИКАЦИИ) ===
                     local startPos = pHrp.Position
                     local endPos = pos + Vector3.new(0, 4, 0)
-                    local duration = 1.5 -- Время подъема в секундах
+                    local duration = 1.5 
                     local startClock = os.clock()
                     
                     while farmActive and (os.clock() - startClock) < duration do
@@ -187,7 +185,6 @@ FarmToggle = Tab:CreateToggle({
                         task.wait(0.01)
                     end
                     
-                    -- === ОСНОВНОЙ ЦИКЛ УДЕРЖАНИЯ И КЛИКОВ ===
                     while farmActive do
                         char1 = getCharacter(LocalPlayer.Name)
                         pHrp = char1 and char1:FindFirstChild("HumanoidRootPart")
@@ -196,7 +193,6 @@ FarmToggle = Tab:CreateToggle({
                             pHrp.Velocity = Vector3.new(0, 0, 0)
                             pHrp.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
                             
-                            -- Атака
                             VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
                             task.wait(0.02)
                             VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
@@ -210,7 +206,7 @@ FarmToggle = Tab:CreateToggle({
                     FarmToggle:Set(false)
                     Rayfield:Notify({
                        Title = "Ошибка логики",
-                       Content = "Ты не указал ник Игрока 1. Укажи ник и перезапусти.",
+                       Content = "Ты не указал ник Игрока 1!",
                        Duration = 4,
                        Image = 4483362458,
                     })
@@ -220,55 +216,78 @@ FarmToggle = Tab:CreateToggle({
                 task.spawn(function()
                     while farmActive do
                         local pg = LocalPlayer:FindFirstChild("PlayerGui")
+                        local menu = pg and pg:FindFirstChild("Menu")
                         
-                        if pg then
-                            local menu = pg:FindFirstChild("Menu")
+                        -- ШАГ 1: КЛИКАЕМ КНОПКИ СПАВНА
+                        if menu and menu.Enabled then
+                            local innerMenu = menu:FindFirstChild("Menu")
+                            local mapMenu = menu:FindFirstChild("Map")
                             
-                            if menu and menu.Enabled then
-                                local innerMenu = menu:FindFirstChild("Menu")
-                                local mapMenu = menu:FindFirstChild("Map")
-                                
-                                if innerMenu then
-                                    local btnList = innerMenu:FindFirstChild("ButtonList")
-                                    local btnPlay = btnList and btnList:FindFirstChild("Play")
-                                    if btnPlay then
-                                        clickUI(btnPlay)
-                                        task.wait(0.5)
-                                    end
+                            if innerMenu then
+                                local btnList = innerMenu:FindFirstChild("ButtonList")
+                                local btnPlay = btnList and btnList:FindFirstChild("Play")
+                                if btnPlay then clickUI(btnPlay) task.wait(0.5) end
+                            end
+                            
+                            if mapMenu then
+                                local tapMenu = mapMenu:FindFirstChild("Tap")
+                                local btnRight = tapMenu and tapMenu:FindFirstChild("Right")
+                                if btnRight then
+                                    clickUI(btnRight) task.wait(0.5)
+                                    clickUI(btnRight) task.wait(0.5)
                                 end
                                 
-                                if mapMenu then
-                                    local tapMenu = mapMenu:FindFirstChild("Tap")
-                                    local btnRight = tapMenu and tapMenu:FindFirstChild("Right")
-                                    if btnRight then
-                                        clickUI(btnRight)
-                                        task.wait(0.5)
-                                        clickUI(btnRight)
-                                        task.wait(0.5)
-                                    end
-                                    
-                                    local btnSpawn = mapMenu:FindFirstChild("Spawn")
-                                    if btnSpawn then
-                                        clickUI(btnSpawn)
-                                        task.wait(1.5)
-                                    end
-                                end
-                            else
-                                -- Телепорт к Игроку 1
-                                local targetChar = getCharacter(sharedTarget)
-                                local myChar = getCharacter(LocalPlayer.Name)
+                                local btnSpawn = mapMenu:FindFirstChild("Spawn")
+                                if btnSpawn then clickUI(btnSpawn) task.wait(1.5) end
+                            end
+                        else
+                            -- ШАГ 2: ПЕРСОНАЖ СПАВНИЛСЯ В LIVE. НАЧИНАЕМ СКОЛЬЖЕНИЕ К ИГРОКУ 1
+                            local myChar = getCharacter(LocalPlayer.Name)
+                            local targetChar = getCharacter(sharedTarget)
+                            
+                            if myChar and targetChar then
+                                local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+                                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+                                local hum = myChar:FindFirstChildOfClass("Humanoid")
                                 
-                                if targetChar and myChar then
-                                    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-                                    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+                                if myHrp and targetHrp and hum and hum.Health > 0 then
+                                    local startPos = myHrp.Position
+                                    local duration = 1.5 -- Время скольжения лифта
+                                    local startClock = os.clock()
                                     
-                                    if targetHrp and myHrp then
-                                        myHrp.CFrame = CFrame.new(targetHrp.Position + Vector3.new(0, 0, 3))
+                                    while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
+                                        local t = (os.clock() - startClock) / duration
+                                        myChar = getCharacter(LocalPlayer.Name)
+                                        targetChar = getCharacter(sharedTarget)
+                                        myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                        targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                                        hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                                        
+                                        if myHrp and targetHrp and hum and hum.Health > 0 then
+                                            myHrp.Velocity = Vector3.new(0, 0, 0)
+                                            myHrp.CFrame = CFrame.new(startPos:Lerp(targetHrp.Position + Vector3.new(0, 4, 0), t))
+                                        end
+                                        task.wait(0.01)
+                                    end
+                                    
+                                    -- ШАГ 3 & 4: УДЕРЖАНИЕ НА ПЛАТФОРМЕ И ОЖИДАНИЕ СМЕРТИ (ХП = 0)
+                                    while farmActive and hum and hum.Health > 0 do
+                                        myChar = getCharacter(LocalPlayer.Name)
+                                        targetChar = getCharacter(sharedTarget)
+                                        myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                        targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                                        hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                                        
+                                        if myHrp and targetHrp and hum and hum.Health > 0 then
+                                            myHrp.Velocity = Vector3.new(0, 0, 0)
+                                            myHrp.CFrame = CFrame.new(targetHrp.Position + Vector3.new(0, 2, 0))
+                                        end
+                                        task.wait(0.1)
                                     end
                                 end
                             end
                         end
-                        task.wait(0.3)
+                        task.wait(0.3) -- Задержка проверки состояний цикла
                     end
                 end)
             end
