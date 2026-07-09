@@ -5,8 +5,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm Beta V4",
-   LoadingTitle = "G-Cells Automated Farm",
+   Name = "⚔️ Kaiju Alpha Script | Farm Beta V5",
+   LoadingTitle = "G-Cells Advanced Combo Farm",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -17,7 +17,23 @@ local Tab = Window:CreateTab("Duo Farm", 4483362458)
 local sharedRole = "Игрок 1 (Кому помогают)"
 local farmActive = false
 local farmPosition = nil
-local cooldownTime = 30 -- Дефолтное время ожидания из ТЗ
+local cooldownTime = 30
+
+-- Таблица для отслеживания выбранных кнопок атаки
+local selectedAttacks = {["ЛКМ"] = true} 
+
+-- Карта соответствия строк и KeyCode для VirtualInputManager
+local keyMapping = {
+    ["1"] = Enum.KeyCode.One,
+    ["2"] = Enum.KeyCode.Two,
+    ["3"] = Enum.KeyCode.Three,
+    ["4"] = Enum.KeyCode.Four,
+    ["5"] = Enum.KeyCode.Five,
+    ["6"] = Enum.KeyCode.Six,
+    ["7"] = Enum.KeyCode.Seven,
+    ["8"] = Enum.KeyCode.Eight,
+    ["9"] = Enum.KeyCode.Nine,
+}
 
 -- === НАДЕЖНЫЙ ПОИСК СВОЕГО ПЕРСОНАЖА ===
 local function getMyCharacter()
@@ -123,8 +139,16 @@ local function clickUI(guiObject)
     end)
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Скрипт удерживает тебя наверху и автоматически атакует любого чужого игрока в радиусе платформы."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Выстави желаемое время кулдауна ниже. Запускай скрипт на экране главного меню игры."})
+local function pressKeyboardKey(keyCode)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.01)
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+    end)
+end
+
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Пока напарника нет — ты спамишь R и T. Когда он прилетит — включатся выбранные кнопки атаки."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Настрой кулдаун и запускай фарм на экране главного меню."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -137,10 +161,24 @@ Tab:CreateDropdown({
    end,
 })
 
--- === НАСТРОЙКА ВРЕМЕНИ ОЖИДАНИЯ ===
+-- === НАСТРОЙКА КНОПОК АТАК И СПЕЛЛОВ ===
+Tab:CreateDropdown({
+   Name = "🔥 Выбор прожимаемых кнопок (Мульти-выбор)",
+   Info = "Что Игрок 1 будет нажимать, когда Игрок 2 на платформе",
+   Options = {"ЛКМ", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
+   CurrentOption = {"ЛКМ"},
+   MultipleOptions = true,
+   Flag = "AttacksDropdown",
+   Callback = function(Options)
+      selectedAttacks = {}
+      for _, opt in ipairs(Options) do
+          selectedAttacks[opt] = true
+      end
+   end,
+})
+
 Tab:CreateSlider({
    Name = "⏳ Кулдаун после смерти (сек)",
-   Info = "Сколько Игрок 2 будет ждать в меню перед следующим респавном",
    Range = {0, 60},
    Increment = 1,
    Suffix = "сек",
@@ -193,12 +231,29 @@ FarmToggle = Tab:CreateToggle({
                             end
                             
                             if targetDetected then
-                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                                task.wait(0.02)
-                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                                -- === ЛОГИКА АТАК ИГРОКА ===
+                                if selectedAttacks["ЛКМ"] then
+                                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                                    task.wait(0.01)
+                                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                                end
+                                
+                                for keyStr, keyCode in pairs(keyMapping) do
+                                    if selectedAttacks[keyStr] then
+                                        pressKeyboardKey(keyCode)
+                                    end
+                                end
+                                task.wait(0.04) -- Кулдаун между циклами атак
+                            else
+                                -- === РЕЖИМ ОЖИДАНИЯ: СПАМ R + T ===
+                                pressKeyboardKey(Enum.KeyCode.R)
+                                task.wait(0.01)
+                                pressKeyboardKey(Enum.KeyCode.T)
+                                task.wait(0.05) -- Пауза, чтобы не повесить игровой движок спамом
                             end
+                        else
+                            task.wait(0.1)
                         end
-                        task.wait(0.05)
                     end
                 end)
 
@@ -218,29 +273,25 @@ FarmToggle = Tab:CreateToggle({
                         end
                         
                         if isOnPlatform and hum and hum.Health > 0 then
-                            -- Фиксируем флаг, что мы успешно добрались и стоим на месте фарм-зоны
                             wasOnPlatformAndAlive = true
                             
                             myHrp.Velocity = Vector3.new(0, 0, 0)
                             myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
                             task.wait(0.1)
                         else
-                            -- Если мы до этого были живы на платформе, но сейчас условие не сработало — значит нас убили
                             if wasOnPlatformAndAlive then
                                 wasOnPlatformAndAlive = false
-                                nextSpawnTime = os.clock() + cooldownTime -- Задаем временную метку окончания КД
+                                nextSpawnTime = os.clock() + cooldownTime
                             end
                             
-                            -- Проверяем: идет ли еще кулдаун?
                             if os.clock() < nextSpawnTime then
-                                task.wait(0.5) -- Просто ждем, не нажимая на кнопки интерфейса
+                                task.wait(0.5) 
                             else
-                                -- Время КД вышло (или это самый первый запуск) -> Начинаем цикл кликов
                                 local pg = LocalPlayer:FindFirstChild("PlayerGui")
                                 if pg then
                                     local menuFrame = pg:FindFirstChild("Menu")
                                     
-                                    -- ШАГ 1: Нажимаем кнопку PLAY в главном меню
+                                    -- ШАГ 1: PLAY
                                     local innerMenu = menuFrame and menuFrame:FindFirstChild("Menu")
                                     local btnList = innerMenu and innerMenu:FindFirstChild("ButtonList")
                                     local btnPlay = btnList and btnList:FindFirstChild("Play")
@@ -250,15 +301,15 @@ FarmToggle = Tab:CreateToggle({
                                         task.wait(0.3)
                                     end
                                     
-                                    -- ШАГ 2: Нажимаем кнопку SPAWN на экране выбора карты
+                                    -- ШАГ 2: SPAWN
                                     local mapFrame = menuFrame and menuFrame:FindFirstChild("Map")
                                     local btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
                                     
                                     if btnSpawn then
                                         clickUI(btnSpawn)
-                                        task.wait(2.0) -- Железная задержка 2 сек по ТЗ после появления персонажа
+                                        task.wait(2.0) 
                                         
-                                        -- ШАГ 3: Доставка обновленного тела наверх
+                                        -- ШАГ 3: ЛИФТ
                                         myChar = getMyCharacter()
                                         myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                                         hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
