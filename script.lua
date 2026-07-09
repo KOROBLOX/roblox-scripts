@@ -218,7 +218,7 @@ FarmToggle = Tab:CreateToggle({
                         local pg = LocalPlayer:FindFirstChild("PlayerGui")
                         local menu = pg and pg:FindFirstChild("Menu")
                         
-                        -- ШАГ 1: КЛИКАЕМ КНОПКИ СПАВНА
+                        -- ШАГ 1: КЛИКАЕМ КНОПКИ СПАВНА (ЖДЕМ 4 НАЖАТИЯ)
                         if menu and menu.Enabled then
                             local innerMenu = menu:FindFirstChild("Menu")
                             local mapMenu = menu:FindFirstChild("Map")
@@ -241,53 +241,57 @@ FarmToggle = Tab:CreateToggle({
                                 if btnSpawn then clickUI(btnSpawn) task.wait(1.5) end
                             end
                         else
-                            -- ШАГ 2: ПЕРСОНАЖ СПАВНИЛСЯ В LIVE. НАЧИНАЕМ СКОЛЬЖЕНИЕ К ИГРОКУ 1
+                            -- ШАГ 2: ПЕРСОНАЖ СПАВНИЛСЯ В LIVE. ЖДЕМ СТАБИЛИЗАЦИИ ФИЗИКИ
                             local myChar = getCharacter(LocalPlayer.Name)
-                            local targetChar = getCharacter(sharedTarget)
+                            local hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                            local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                             
-                            if myChar and targetChar then
-                                local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-                                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-                                local hum = myChar:FindFirstChildOfClass("Humanoid")
+                            if myChar and hum and hum.Health > 0 and myHrp then
+                                -- Умная микро-пауза 1.5 секунды вместо костыльных 15 секунд
+                                task.wait(1.5)
                                 
-                                if myHrp and targetHrp and hum and hum.Health > 0 then
+                                -- Перепроверяем состояние после паузы
+                                myChar = getCharacter(LocalPlayer.Name)
+                                myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                                
+                                if myHrp and hum and hum.Health > 0 then
                                     local startPos = myHrp.Position
-                                    local duration = 1.5 -- Время скольжения лифта
+                                    -- Летим строго на глобальные координаты ПЛАТФОРМЫ (Игнорируем невидимость Игрока 1)
+                                    local endPos = pos + Vector3.new(0, 4, 0)
+                                    local duration = 2.0 
                                     local startClock = os.clock()
                                     
+                                    -- НАЧИНАЕМ СКОЛЬЖЕНИЕ (ЛИФТ)
                                     while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
                                         local t = (os.clock() - startClock) / duration
                                         myChar = getCharacter(LocalPlayer.Name)
-                                        targetChar = getCharacter(sharedTarget)
                                         myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                        targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
                                         hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                                         
-                                        if myHrp and targetHrp and hum and hum.Health > 0 then
+                                        if myHrp and hum and hum.Health > 0 then
                                             myHrp.Velocity = Vector3.new(0, 0, 0)
-                                            myHrp.CFrame = CFrame.new(startPos:Lerp(targetHrp.Position + Vector3.new(0, 4, 0), t))
+                                            myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
                                         end
                                         task.wait(0.01)
                                     end
                                     
-                                    -- ШАГ 3 & 4: УДЕРЖАНИЕ НА ПЛАТФОРМЕ И ОЖИДАНИЕ СМЕРТИ (ХП = 0)
+                                    -- ШАГ 3 & 4: УДЕРЖАНИЕ И ОЖИДАНИЕ СМЕРТИ (ХП = 0)
                                     while farmActive and hum and hum.Health > 0 do
                                         myChar = getCharacter(LocalPlayer.Name)
-                                        targetChar = getCharacter(sharedTarget)
                                         myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                        targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
                                         hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                                         
-                                        if myHrp and targetHrp and hum and hum.Health > 0 then
+                                        if myHrp and hum and hum.Health > 0 then
                                             myHrp.Velocity = Vector3.new(0, 0, 0)
-                                            myHrp.CFrame = CFrame.new(targetHrp.Position + Vector3.new(0, 2, 0))
+                                            myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0)) -- Стоим на платформе под ударами
                                         end
                                         task.wait(0.1)
                                     end
                                 end
                             end
                         end
-                        task.wait(0.3) -- Задержка проверки состояний цикла
+                        task.wait(0.3)
                     end
                 end)
             end
