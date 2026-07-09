@@ -5,8 +5,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm Beta V5",
-   LoadingTitle = "G-Cells Advanced Combo Farm",
+   Name = "⚔️ Kaiju Alpha Script | Farm V6",
+   LoadingTitle = "G-Cells Platform Timer Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -17,7 +17,7 @@ local Tab = Window:CreateTab("Duo Farm", 4483362458)
 local sharedRole = "Игрок 1 (Кому помогают)"
 local farmActive = false
 local farmPosition = nil
-local cooldownTime = 30
+local cooldownTime = 30 -- Время безопасного ожидания на платформе
 
 -- Таблица для отслеживания выбранных кнопок атаки
 local selectedAttacks = {["ЛКМ"] = true} 
@@ -147,8 +147,8 @@ local function pressKeyboardKey(keyCode)
     end)
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Пока напарника нет — ты спамишь R и T. Когда он прилетит — включатся выбранные кнопки атаки."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Настрой кулдаун и запускай фарм на экране главного меню."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Когда Игрок 2 прилетит на платформу, скрипт запустит таймер ожидания. Во время ожидания ты спамишь R и T. Как только таймер кончится — начнётся атака."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Запускай фарм на экране главного меню. Скрипт будет мгновенно респавниться и лететь на платформу без задержек."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -161,10 +161,9 @@ Tab:CreateDropdown({
    end,
 })
 
--- === НАСТРОЙКА КНОПОК АТАК И СПЕЛЛОВ ===
 Tab:CreateDropdown({
    Name = "🔥 Выбор прожимаемых кнопок (Мульти-выбор)",
-   Info = "Что Игрок 1 будет нажимать, когда Игрок 2 на платформе",
+   Info = "Что Игрок 1 нажимает, когда таймер ожидания закончился",
    Options = {"ЛКМ", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
    CurrentOption = {"ЛКМ"},
    MultipleOptions = true,
@@ -178,7 +177,8 @@ Tab:CreateDropdown({
 })
 
 Tab:CreateSlider({
-   Name = "⏳ Кулдаун после смерти (сек)",
+   Name = "⏳ Время ожидания на платформе (сек)",
+   Info = "Сколько времени Игрок 1 будет ждать (и спамить R+T) перед тем, как начать бить прилетевшего Игрока 2",
    Range = {0, 60},
    Increment = 1,
    Suffix = "сек",
@@ -202,6 +202,9 @@ FarmToggle = Tab:CreateToggle({
 
             if sharedRole == "Игрок 1 (Кому помогают)" then
                 task.spawn(function()
+                    local targetTracked = false
+                    local attackAllowedTime = 0
+
                     while farmActive do
                         local myChar = getMyCharacter()
                         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -231,25 +234,43 @@ FarmToggle = Tab:CreateToggle({
                             end
                             
                             if targetDetected then
-                                -- === ЛОГИКА АТАК ИГРОКА ===
-                                if selectedAttacks["ЛКМ"] then
-                                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                                    task.wait(0.01)
-                                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                                -- Игрок 2 обнаружен на платформе
+                                if not targetTracked then
+                                    -- Это новый прилёт! Засекаем время, в течение которого бить НЕЛЬЗЯ
+                                    targetTracked = true
+                                    attackAllowedTime = os.clock() + cooldownTime
                                 end
                                 
-                                for keyStr, keyCode in pairs(keyMapping) do
-                                    if selectedAttacks[keyStr] then
-                                        pressKeyboardKey(keyCode)
+                                if os.clock() >= attackAllowedTime then
+                                    -- ТАЙМЕР ЗАКОНЧИЛСЯ -> НАЧИНАЕМ БИТЬ
+                                    if selectedAttacks["ЛКМ"] then
+                                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                                        task.wait(0.01)
+                                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
                                     end
+                                    
+                                    for keyStr, keyCode in pairs(keyMapping) do
+                                        if selectedAttacks[keyStr] then
+                                            pressKeyboardKey(keyCode)
+                                        end
+                                    end
+                                    task.wait(0.04)
+                                else
+                                    -- Игрок 2 на платформе, но таймер еще идет -> Спамим R и T
+                                    pressKeyboardKey(Enum.KeyCode.R)
+                                    task.wait(0.01)
+                                    pressKeyboardKey(Enum.KeyCode.T)
+                                    task.wait(0.05)
                                 end
-                                task.wait(0.04) -- Кулдаун между циклами атак
                             else
-                                -- === РЕЖИМ ОЖИДАНИЯ: СПАМ R + T ===
+                                -- Игрока 2 нет на платформе (умер или летит) -> Сбрасываем трекер таймера
+                                targetTracked = false
+                                
+                                -- Спамим R и T в режиме полного отсутствия цели
                                 pressKeyboardKey(Enum.KeyCode.R)
                                 task.wait(0.01)
                                 pressKeyboardKey(Enum.KeyCode.T)
-                                task.wait(0.05) -- Пауза, чтобы не повесить игровой движок спамом
+                                task.wait(0.05)
                             end
                         else
                             task.wait(0.1)
@@ -259,9 +280,6 @@ FarmToggle = Tab:CreateToggle({
 
             elseif sharedRole == "Игрок 2 (Кто помогает)" then
                 task.spawn(function()
-                    local wasOnPlatformAndAlive = false
-                    local nextSpawnTime = 0
-
                     while farmActive do
                         local myChar = getMyCharacter()
                         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -273,72 +291,63 @@ FarmToggle = Tab:CreateToggle({
                         end
                         
                         if isOnPlatform and hum and hum.Health > 0 then
-                            wasOnPlatformAndAlive = true
-                            
+                            -- МЫ НА ПЛАТФОРМЕ — Смирно стоим и ждем, пока Игрок 1 закончит свой таймер
                             myHrp.Velocity = Vector3.new(0, 0, 0)
                             myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
                             task.wait(0.1)
                         else
-                            if wasOnPlatformAndAlive then
-                                wasOnPlatformAndAlive = false
-                                nextSpawnTime = os.clock() + cooldownTime
-                            end
-                            
-                            if os.clock() < nextSpawnTime then
-                                task.wait(0.5) 
-                            else
-                                local pg = LocalPlayer:FindFirstChild("PlayerGui")
-                                if pg then
-                                    local menuFrame = pg:FindFirstChild("Menu")
+                            -- МЫ В МЕНЮ ИЛИ ТОЛЬКО СПАВНИМСЯ -> Никаких задержек в меню, жмём сразу!
+                            local pg = LocalPlayer:FindFirstChild("PlayerGui")
+                            if pg then
+                                local menuFrame = pg:FindFirstChild("Menu")
+                                
+                                -- ШАГ 1: PLAY
+                                local innerMenu = menuFrame and menuFrame:FindFirstChild("Menu")
+                                local btnList = innerMenu and innerMenu:FindFirstChild("ButtonList")
+                                local btnPlay = btnList and btnList:FindFirstChild("Play")
+                                
+                                if btnPlay then
+                                    clickUI(btnPlay)
+                                    task.wait(0.3)
+                                end
+                                
+                                -- ШАГ 2: SPAWN
+                                local mapFrame = menuFrame and menuFrame:FindFirstChild("Map")
+                                local btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
+                                
+                                if btnSpawn then
+                                    clickUI(btnSpawn)
+                                    task.wait(2.0) -- Железная задержка 2 сек по ТЗ после спавна персонажа перед полетом
                                     
-                                    -- ШАГ 1: PLAY
-                                    local innerMenu = menuFrame and menuFrame:FindFirstChild("Menu")
-                                    local btnList = innerMenu and innerMenu:FindFirstChild("ButtonList")
-                                    local btnPlay = btnList and btnList:FindFirstChild("Play")
+                                    -- ШАГ 3: ЛИФТ ДО ПЛАТФОРМЫ
+                                    myChar = getMyCharacter()
+                                    myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                    hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                                     
-                                    if btnPlay then
-                                        clickUI(btnPlay)
-                                        task.wait(0.3)
-                                    end
-                                    
-                                    -- ШАГ 2: SPAWN
-                                    local mapFrame = menuFrame and menuFrame:FindFirstChild("Map")
-                                    local btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
-                                    
-                                    if btnSpawn then
-                                        clickUI(btnSpawn)
-                                        task.wait(2.0) 
+                                    if myHrp and hum and hum.Health > 0 then
+                                        local startPos = myHrp.Position
+                                        local endPos = pos + Vector3.new(0, 4, 0)
+                                        local duration = 2.0 
+                                        local startClock = os.clock()
                                         
-                                        -- ШАГ 3: ЛИФТ
-                                        myChar = getMyCharacter()
-                                        myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                        hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                        
-                                        if myHrp and hum and hum.Health > 0 then
-                                            local startPos = myHrp.Position
-                                            local endPos = pos + Vector3.new(0, 4, 0)
-                                            local duration = 2.0 
-                                            local startClock = os.clock()
+                                        while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
+                                            local t = (os.clock() - startClock) / duration
+                                            myChar = getMyCharacter()
+                                            myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                            hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                                             
-                                            while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
-                                                local t = (os.clock() - startClock) / duration
-                                                myChar = getMyCharacter()
-                                                myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                                hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                                
-                                                if myHrp and hum and hum.Health > 0 then
-                                                    myHrp.Velocity = Vector3.new(0, 0, 0)
-                                                    myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
-                                                end
-                                                task.wait(0.01)
+                                            if myHrp and hum and hum.Health > 0 then
+                                                myHrp.Velocity = Vector3.new(0, 0, 0)
+                                                myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
                                             end
+                                            task.wait(0.01)
                                         end
-                                    else
-                                        task.wait(0.5)
                                     end
                                 else
                                     task.wait(0.5)
                                 end
+                            else
+                                task.wait(0.5)
                             end
                         end
                         task.wait(0.1)
