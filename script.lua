@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm Beta 1",
+   Name = "⚔️ Kaiju Alpha Script | Farm Beta",
    LoadingTitle = "G-Cells Farm Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
@@ -122,8 +122,8 @@ local function clickUI(guiObject)
     end
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Игрок 1", Content = "Включи тумблер. Ты улетишь на платформу и начнешь фарм."})
-Tab:CreateParagraph({Title = "ℹ️ Игрок 2", Content = "Введи ник Игрока 1. Скрипт сам прокликает меню и полетит к нему."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Ты улетишь на платформу. Авто-удары начнутся автоматически, как только Игрок 2 долетит до тебя."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Введи ник Игрока 1. ВНИМАНИЕ: Начинай фарм строго находясь в меню выбора карты! Скрипт сам нажмет кнопку Спавна, подождет 2 секунды и полетит."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -168,6 +168,7 @@ FarmToggle = Tab:CreateToggle({
                     local pHrp = char1:WaitForChild("HumanoidRootPart", 5)
                     if not pHrp then return end
                     
+                    -- Лифт для Игрока 1 при старте
                     local startPos = pHrp.Position
                     local endPos = pos + Vector3.new(0, 4, 0)
                     local duration = 1.5 
@@ -185,6 +186,7 @@ FarmToggle = Tab:CreateToggle({
                         task.wait(0.01)
                     end
                     
+                    -- Основной цикл Игрока 1
                     while farmActive do
                         char1 = getCharacter(LocalPlayer.Name)
                         pHrp = char1 and char1:FindFirstChild("HumanoidRootPart")
@@ -193,9 +195,25 @@ FarmToggle = Tab:CreateToggle({
                             pHrp.Velocity = Vector3.new(0, 0, 0)
                             pHrp.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
                             
-                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                            task.wait(0.02)
-                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                            -- ПРОВЕРКА: Находится ли Игрок 2 на платформе?
+                            local targetChar = getCharacter(sharedTarget)
+                            local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                            local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+                            
+                            local targetIsReady = false
+                            if targetHrp and targetHum and targetHum.Health > 0 then
+                                -- Проверяем высоту (Y > 4950) и дистанцию до центра нашей платформы
+                                if targetHrp.Position.Y > 4950 and (targetHrp.Position - pos).Magnitude < 40 then
+                                    targetIsReady = true
+                                end
+                            end
+                            
+                            -- Бьем только тогда, когда цель доехала и жива
+                            if targetIsReady then
+                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                                task.wait(0.02)
+                                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                            end
                         end
                         task.wait(0.05)
                     end
@@ -219,79 +237,55 @@ FarmToggle = Tab:CreateToggle({
                         local hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                         
-                        -- ПРОВЕРКА: Если мы реально заспавнились в мире и живы
+                        -- Если мы заспавнились в мире и живы
                         if myChar and hum and hum.Health > 0 and myHrp then
                             
-                            -- Короткое ожидание стабилизации после спавна
-                            task.wait(1.0)
+                            local startPos = myHrp.Position
+                            local endPos = pos + Vector3.new(0, 4, 0)
+                            local duration = 2.0 
+                            local startClock = os.clock()
                             
-                            -- Обновляем ссылки после задержки
-                            myChar = getCharacter(LocalPlayer.Name)
-                            myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                            hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                            -- ЕДЕМ НА ПЛАТФОРМУ
+                            while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
+                                local t = (os.clock() - startClock) / duration
+                                myChar = getCharacter(LocalPlayer.Name)
+                                myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                                
+                                if myHrp and hum and hum.Health > 0 then
+                                    myHrp.Velocity = Vector3.new(0, 0, 0)
+                                    myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
+                                end
+                                task.wait(0.01)
+                            end
                             
-                            if myHrp and hum and hum.Health > 0 then
-                                local startPos = myHrp.Position
-                                local endPos = pos + Vector3.new(0, 4, 0)
-                                local duration = 2.0 
-                                local startClock = os.clock()
+                            -- СТОИМ НА ПЛАТФОРМЕ И ЖДЕМ СМЕРТИ И ОТДАЕМ КЛЕТКИ
+                            while farmActive and hum and hum.Health > 0 do
+                                myChar = getCharacter(LocalPlayer.Name)
+                                myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                                 
-                                -- ЛИФТ (СКОЛЬЖЕНИЕ ДО ПЛАТФОРМЫ)
-                                while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
-                                    local t = (os.clock() - startClock) / duration
-                                    myChar = getCharacter(LocalPlayer.Name)
-                                    myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                    hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                    
-                                    if myHrp and hum and hum.Health > 0 then
-                                        myHrp.Velocity = Vector3.new(0, 0, 0)
-                                        myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
-                                    end
-                                    task.wait(0.01)
+                                if myHrp and hum and hum.Health > 0 then
+                                    myHrp.Velocity = Vector3.new(0, 0, 0)
+                                    myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
                                 end
-                                
-                                -- УДЕРЖАНИЕ НА ПЛАТФОРМЕ ДО ТЕХ ПОР, ПОКА ХП НЕ СТАНЕТ = 0
-                                while farmActive and hum and hum.Health > 0 do
-                                    myChar = getCharacter(LocalPlayer.Name)
-                                    myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                    hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                    
-                                    if myHrp and hum and hum.Health > 0 then
-                                        myHrp.Velocity = Vector3.new(0, 0, 0)
-                                        myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
-                                    end
-                                    task.wait(0.1)
-                                end
+                                task.wait(0.1)
                             end
                         else
-                            -- ПЕРСОНАЖА НЕТ ИЛИ ОН МЕРТВ -> КЛИКАЕМ МЕНЮ СПАВНА
+                            -- МЫ В МЕНЮ ИЛИ МЕРТВЫ -> ТАРГЕТИРУЕМ КНОПКУ СПАВНА В PLAYERGUI
                             local pg = LocalPlayer:FindFirstChild("PlayerGui")
                             local menu = pg and pg:FindFirstChild("Menu")
+                            local mapMenu = menu and menu:FindFirstChild("Map")
+                            local btnSpawn = mapMenu and mapMenu:FindFirstChild("Spawn")
                             
-                            if menu and menu.Enabled then
-                                local innerMenu = menu:FindFirstChild("Menu")
-                                local mapMenu = menu:FindFirstChild("Map")
-                                
-                                if innerMenu then
-                                    local btnList = innerMenu:FindFirstChild("ButtonList")
-                                    local btnPlay = btnList and btnList:FindFirstChild("Play")
-                                    if btnPlay then clickUI(btnPlay) task.wait(0.5) end
-                                end
-                                
-                                if mapMenu then
-                                    local tapMenu = mapMenu:FindFirstChild("Tap")
-                                    local btnRight = tapMenu and tapMenu:FindFirstChild("Right")
-                                    if btnRight then
-                                        clickUI(btnRight) task.wait(0.5)
-                                        clickUI(btnRight) task.wait(0.5)
-                                    end
-                                    
-                                    local btnSpawn = mapMenu:FindFirstChild("Spawn")
-                                    if btnSpawn then clickUI(btnSpawn) task.wait(1.5) end
-                                end
+                            if btnSpawn then
+                                clickUI(btnSpawn)
+                                task.wait(2.0) -- Жесткая задержка в 2 секунды после клика по ТЗ
+                            else
+                                task.wait(0.5)
                             end
                         end
-                        task.wait(0.3)
+                        task.wait(0.1)
                     end
                 end)
             end
