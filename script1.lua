@@ -1,12 +1,13 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm V6",
-   LoadingTitle = "G-Cells Platform Timer Edition",
+   Name = "⚔️ Kaiju Alpha Script | Farm V7",
+   LoadingTitle = "G-Cells Accurate Click Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -17,12 +18,10 @@ local Tab = Window:CreateTab("Duo Farm", 4483362458)
 local sharedRole = "Игрок 1 (Кому помогают)"
 local farmActive = false
 local farmPosition = nil
-local cooldownTime = 30 -- Время безопасного ожидания на платформе
+local cooldownTime = 30
 
--- Таблица для отслеживания выбранных кнопок атаки
 local selectedAttacks = {["ЛКМ"] = true} 
 
--- Карта соответствия строк и KeyCode для VirtualInputManager
 local keyMapping = {
     ["1"] = Enum.KeyCode.One,
     ["2"] = Enum.KeyCode.Two,
@@ -119,20 +118,37 @@ local function createFarmPlatform()
     return farmPosition
 end
 
+-- === УЛЬТИМАТИВНЫЙ АНТИ-АНИМАЦИОННЫЙ КЛИКЕР ===
 local function clickUI(guiObject)
-    if not guiObject then return end
+    if not guiObject or not guiObject.IsAncestorOf or not guiObject:IsDescendantOf(game) then return end
+    
+    -- Стабилизатор: ждем пока кнопка закончит двигаться по экрану
+    local lastPos = guiObject.AbsolutePosition
+    task.wait(0.05)
+    local checkAttempts = 0
+    while guiObject.AbsolutePosition ~= lastPos and checkAttempts < 10 do
+        lastPos = guiObject.AbsolutePosition
+        task.wait(0.05)
+        checkAttempts = checkAttempts + 1
+    end
+
+    -- Виртуальный клик силами API движка
     pcall(function()
         if firesignal then
             firesignal(guiObject.MouseButton1Click)
             firesignal(guiObject.Activated)
         end
     end)
+    
+    -- Физический точный клик мыши с динамическим отступом TopBar
     pcall(function()
+        local inset = GuiService:GetGuiInset()
         local absPos = guiObject.AbsolutePosition
         local absSize = guiObject.AbsoluteSize
-        local centerX = absPos.X + absSize.X / 2
-        local centerY = absPos.Y + absSize.Y / 2 + 36
         
+        local centerX = absPos.X + absSize.X / 2
+        local centerY = absPos.Y + absSize.Y / 2 + inset.Y
+
         VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
         task.wait(0.02)
         VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
@@ -147,8 +163,8 @@ local function pressKeyboardKey(keyCode)
     end)
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Когда Игрок 2 прилетит на платформу, скрипт запустит таймер ожидания. Во время ожидания ты спамишь R и T. Как только таймер кончится — начнётся атака."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Запускай фарм на экране главного меню. Скрипт будет мгновенно респавниться и лететь на платформу без задержек."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Скрипт автоматически бьёт выбранными кнопками, когда цель на платформе, и спамит R+T, пока её нет."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Скрипт полностью исправлен. Клик по кнопкам адаптируется под любые экраны и ждёт окончания анимаций интерфейса."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -178,7 +194,6 @@ Tab:CreateDropdown({
 
 Tab:CreateSlider({
    Name = "⏳ Время ожидания на платформе (сек)",
-   Info = "Сколько времени Игрок 1 будет ждать (и спамить R+T) перед тем, как начать бить прилетевшего Игрока 2",
    Range = {0, 60},
    Increment = 1,
    Suffix = "сек",
@@ -213,7 +228,6 @@ FarmToggle = Tab:CreateToggle({
                             myHrp.Velocity = Vector3.new(0, 0, 0)
                             myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
                             
-                            -- РАДИУС-СКАНЕР ПЛАТФОРМЫ
                             local targetDetected = false
                             local liveFolder = game.Workspace:FindFirstChild("Live")
                             
@@ -234,15 +248,12 @@ FarmToggle = Tab:CreateToggle({
                             end
                             
                             if targetDetected then
-                                -- Игрок 2 обнаружен на платформе
                                 if not targetTracked then
-                                    -- Это новый прилёт! Засекаем время, в течение которого бить НЕЛЬЗЯ
                                     targetTracked = true
                                     attackAllowedTime = os.clock() + cooldownTime
                                 end
                                 
                                 if os.clock() >= attackAllowedTime then
-                                    -- ТАЙМЕР ЗАКОНЧИЛСЯ -> НАЧИНАЕМ БИТЬ
                                     if selectedAttacks["ЛКМ"] then
                                         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
                                         task.wait(0.01)
@@ -256,17 +267,13 @@ FarmToggle = Tab:CreateToggle({
                                     end
                                     task.wait(0.04)
                                 else
-                                    -- Игрок 2 на платформе, но таймер еще идет -> Спамим R и T
                                     pressKeyboardKey(Enum.KeyCode.R)
                                     task.wait(0.01)
                                     pressKeyboardKey(Enum.KeyCode.T)
                                     task.wait(0.05)
                                 end
                             else
-                                -- Игрока 2 нет на платформе (умер или летит) -> Сбрасываем трекер таймера
                                 targetTracked = false
-                                
-                                -- Спамим R и T в режиме полного отсутствия цели
                                 pressKeyboardKey(Enum.KeyCode.R)
                                 task.wait(0.01)
                                 pressKeyboardKey(Enum.KeyCode.T)
@@ -291,35 +298,32 @@ FarmToggle = Tab:CreateToggle({
                         end
                         
                         if isOnPlatform and hum and hum.Health > 0 then
-                            -- МЫ НА ПЛАТФОРМЕ — Смирно стоим и ждем, пока Игрок 1 закончит свой таймер
                             myHrp.Velocity = Vector3.new(0, 0, 0)
                             myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
                             task.wait(0.1)
                         else
-                            -- МЫ В МЕНЮ ИЛИ ТОЛЬКО СПАВНИМСЯ -> Никаких задержек в меню, жмём сразу!
                             local pg = LocalPlayer:FindFirstChild("PlayerGui")
-                            if pg then
-                                local menuFrame = pg:FindFirstChild("Menu")
-                                
-                                -- ШАГ 1: PLAY
-                                local innerMenu = menuFrame and menuFrame:FindFirstChild("Menu")
+                            local menuFrame = pg and pg:FindFirstChild("Menu")
+                            
+                            if menuFrame then
+                                local innerMenu = menuFrame:FindFirstChild("Menu")
                                 local btnList = innerMenu and innerMenu:FindFirstChild("ButtonList")
                                 local btnPlay = btnList and btnList:FindFirstChild("Play")
                                 
-                                if btnPlay then
-                                    clickUI(btnPlay)
-                                    task.wait(0.3)
-                                end
-                                
-                                -- ШАГ 2: SPAWN
-                                local mapFrame = menuFrame and menuFrame:FindFirstChild("Map")
+                                local mapFrame = menuFrame:FindFirstChild("Map")
                                 local btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
                                 
-                                if btnSpawn then
+                                -- Шаг А: Жмём Play, только если экран выбора карты ЕЩЕ НЕ открыт
+                                if btnPlay and btnPlay.AbsoluteSize.X > 0 and (not mapFrame or not mapFrame.Visible) then
+                                    clickUI(btnPlay)
+                                    task.wait(0.2)
+                                
+                                -- Шаг Б: Жмём Spawn, только если экран выбора карты РЕАЛЬНО открылся и виден
+                                elseif btnSpawn and btnSpawn.AbsoluteSize.X > 0 and mapFrame.Visible then
                                     clickUI(btnSpawn)
-                                    task.wait(2.0) -- Железная задержка 2 сек по ТЗ после спавна персонажа перед полетом
+                                    task.wait(2.0) -- Железные 2 секунды ожидания прогрузки персонажа
                                     
-                                    -- ШАГ 3: ЛИФТ ДО ПЛАТФОРМЫ
+                                    -- Шаг В: Полёт
                                     myChar = getMyCharacter()
                                     myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                                     hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
@@ -344,10 +348,10 @@ FarmToggle = Tab:CreateToggle({
                                         end
                                     end
                                 else
-                                    task.wait(0.5)
+                                    task.wait(0.1)
                                 end
                             else
-                                task.wait(0.5)
+                                task.wait(0.2)
                             end
                         end
                         task.wait(0.1)
