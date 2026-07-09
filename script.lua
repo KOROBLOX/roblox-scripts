@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm Beta 1",
+   Name = "⚔️ Kaiju Alpha Script | Farm Beta",
    LoadingTitle = "G-Cells Farm Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
@@ -19,33 +19,43 @@ local sharedTarget = ""
 local farmActive = false
 local farmPosition = nil
 
--- === НЕУБИВАЕМЫЙ ПОИСК ИГРОКА И ЕГО МОДЕЛИ ===
-local function findRealPlayer(nameOrDisplayName)
-    if nameOrDisplayName == "" then return nil end
+-- === НАДЕЖНЫЙ ПОИСК ПЕРСОНАЖА ===
+local function getCharacter(playerName)
+    if not playerName or playerName == "" then return nil end
+    
+    -- Ищем по реальному имени или дисплейнейму через Players
+    local targetPlayer = nil
     for _, p in ipairs(Players:GetPlayers()) do
-        if p.Name:lower() == nameOrDisplayName:lower() or p.DisplayName:lower() == nameOrDisplayName:lower() then
-            return p
+        if p.Name == playerName or p.DisplayName == playerName then
+            targetPlayer = p
+            break
         end
     end
+    
+    if targetPlayer and targetPlayer.Character then 
+        return targetPlayer.Character 
+    end
+    
+    -- Запасной план: прямой перебор папки Live
+    local liveFolder = game.Workspace:FindFirstChild("Live")
+    if liveFolder then
+        local char = liveFolder:FindFirstChild(playerName)
+        if char then return char end
+    end
+    
     return nil
 end
 
-local function getCharacter(nameOrDisplayName)
-    local p = findRealPlayer(nameOrDisplayName)
-    if p and p.Character then 
-        return p.Character 
-    end
-    
-    -- Запасной вариант: прямой поиск в workspace.Live
-    local liveFolder = game.Workspace:FindFirstChild("Live")
-    if liveFolder and nameOrDisplayName ~= "" then
-        for _, child in ipairs(liveFolder:GetChildren()) do
-            if child.Name:lower() == nameOrDisplayName:lower() then
-                return child
-            end
+-- === ДИНАМИЧЕСКОЕ ОБНОВЛЕНИЕ СПИСКА ИГРОКОВ ===
+local function getPlayerList()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(list, p.Name)
         end
     end
-    return nil
+    if #list == 0 then table.insert(list, "Нет игроков на сервере") end
+    return list
 end
 
 -- === СОЗДАНИЕ ЗОНЫ ОСТАНОВКИ ===
@@ -123,7 +133,6 @@ end
 local function clickUI(guiObject)
     if not guiObject then return end
     
-    -- Прожимаем всеми доступными методами API для обхода защит
     pcall(function()
         if firesignal then
             firesignal(guiObject.MouseButton1Click)
@@ -131,7 +140,6 @@ local function clickUI(guiObject)
         end
     end)
     
-    -- Физическая эмуляция клика по координатам центра кнопки
     pcall(function()
         local absPos = guiObject.AbsolutePosition
         local absSize = guiObject.AbsoluteSize
@@ -144,8 +152,8 @@ local function clickUI(guiObject)
     end)
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Ты улетишь на платформу. Авто-атака сработает ТОЛЬКО тогда, когда Игрок 2 долетит до тебя и встанет на платформу."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "ВНИМАНИЕ: Активируй тумблер строго на экране выбора карты! Скрипт сам нажмет кнопку Spawn в PlayerGui, подождет 2 секунды и доставит тебя на платформу."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Ты улетишь на платформу. Скрипт начнет бить напарника, как только тот окажется в радиусе платформы."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "ВНИМАНИЕ: Активируй тумблер на экране главного меню / выбора карты. Скрипт по очереди нажмет кнопки Play и Spawn, подождет 2 секунды и полетит вверх."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -158,14 +166,28 @@ Tab:CreateDropdown({
    end,
 })
 
-Tab:CreateInput({
-   Name = "Ник вашего НАПАРНИКА",
-   PlaceholderText = "Введи ник второго игрока...",
-   RemoveTextAfterFocusLost = false,
-   Callback = function(Text)
-      sharedTarget = Text
+local PlayerDropdown = Tab:CreateDropdown({
+   Name = "Выбери НАПАРНИКА",
+   Options = getPlayerList(),
+   CurrentOption = {""},
+   MultipleOptions = false,
+   Flag = "PartnerDropdown",
+   Callback = function(Option)
+      sharedTarget = Option[1]
    end,
 })
+
+-- Фоновый поток обновления списка игроков раз в 5 секунд
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if PlayerDropdown then
+            pcall(function()
+                PlayerDropdown:Refresh(getPlayerList(), true)
+            end)
+        end
+    end
+end)
 
 FarmToggle = Tab:CreateToggle({
    Name = "💥 ЗАПУСК АВТО ФАРМА G-КЛЕТОК",
@@ -185,25 +207,25 @@ FarmToggle = Tab:CreateToggle({
                         local pHrp = char1 and char1:FindFirstChild("HumanoidRootPart")
                         
                         if pHrp and pHrp.Parent then
-                            -- Фиксируем Игрока 1 на платформе
+                            -- Удерживаем Игрока 1 на платформе
                             pHrp.Velocity = Vector3.new(0, 0, 0)
                             pHrp.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
                             
-                            -- ПРОВЕРКА НАПАРНИКА (ИГРОКА 2)
+                            -- ПРОВЕРКА НАПАРНИКА НА НАХОЖДЕНИЕ РЯДОМ С ПЛАТФОРМОЙ
                             local partnerChar = getCharacter(sharedTarget)
                             local partnerHrp = partnerChar and partnerChar:FindFirstChild("HumanoidRootPart")
                             local partnerHum = partnerChar and partnerChar:FindFirstChildOfClass("Humanoid")
                             
-                            local partnerIsReady = false
+                            local partnerIsNear = false
                             if partnerHrp and partnerHum and partnerHum.Health > 0 then
-                                -- Напарник готов, если он выше 4950 блоков и в радиусе платформы
-                                if partnerHrp.Position.Y > 4950 and (partnerHrp.Position - pos).Magnitude < 40 then
-                                    partnerIsReady = true
+                                -- Проверяем дистанцию до центра платформы (сфера радиусом 50 студий)
+                                if (partnerHrp.Position - pos).Magnitude < 50 then
+                                    partnerIsNear = true
                                 end
                             end
                             
-                            -- Бьем только при наличии цели на платформе
-                            if partnerIsReady then
+                            -- Бьем только когда напарник зашел в радиус зоны фарма
+                            if partnerIsNear then
                                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
                                 task.wait(0.02)
                                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
@@ -214,11 +236,11 @@ FarmToggle = Tab:CreateToggle({
                 end)
 
             elseif sharedRole == "Игрок 2 (Кто помогает)" then
-                if sharedTarget == "" then
+                if sharedTarget == "" or sharedTarget == "Нет игроков на сервере" then
                     FarmToggle:Set(false)
                     Rayfield:Notify({
                        Title = "Внимание",
-                       Content = "Ты забыл указать ник напарника (Игрока 1)!",
+                       Content = "Сначала выбери напарника из списка!",
                        Duration = 4,
                        Image = 4483362458,
                     })
@@ -231,64 +253,65 @@ FarmToggle = Tab:CreateToggle({
                         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                         local hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                         
-                        -- Проверяем, на платформе ли мы уже
+                        -- Проверяем, находимся ли мы уже на платформе
                         local isOnPlatform = false
-                        if myHrp and myHrp.Position.Y > 4950 and (myHrp.Position - pos).Magnitude < 50 then
+                        if myHrp and (myHrp.Position - pos).Magnitude < 55 then
                             isOnPlatform = true
                         end
                         
                         if isOnPlatform and hum and hum.Health > 0 then
-                            -- ШАГ 3: МЫ НА ПЛАТФОРМЕ — УДЕРЖИВАЕМ ПОЗИЦИЮ И ЖДЕМ ОБНУЛЕНИЯ ХП
+                            -- ШАГ 4: МЫ НА ПЛАТФОРМЕ — УДЕРЖИВАЕМ ПОЗИЦИЮ И ЖДЕМ ОБНУЛЕНИЯ ХП
                             myHrp.Velocity = Vector3.new(0, 0, 0)
                             myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
                             task.wait(0.1)
                         else
-                            -- ШАГ 1: МЫ В МЕНЮ ИЛИ НА ЗЕМЛЕ — ИЩЕМ КНОПКУ СПАВНА В PLAYERGUI
+                            -- МЫ МЕРТВЫ ИЛИ НА ЗЕМЛЕ -> ПРОЖИМАЕМ МЕНЮ ПО НОВОМУ ЦИКЛУ
                             local pg = LocalPlayer:FindFirstChild("PlayerGui")
-                            local btnSpawn = nil
-                            
                             if pg then
-                                -- Поиск по точному пути, переданному тобой
-                                local menuFrame = pg:FindFirstChild("Menu")
-                                local mapFrame = menuFrame and menuFrame:FindFirstChild("Map")
-                                btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
+                                local menuGui = pg:FindFirstChild("Menu")
                                 
-                                -- Резервный поиск на случай непредвиденных изменений в иерархии UI
-                                if not btnSpawn then
-                                    btnSpawn = pg:FindFirstChild("Spawn", true)
+                                -- 1. Ищем и нажимаем кнопку PLAY
+                                local innerMenu = menuGui and menuGui:FindFirstChild("Menu")
+                                local btnList = innerMenu and innerMenu:FindFirstChild("ButtonList")
+                                local btnPlay = btnList and btnList:FindFirstChild("Play")
+                                if btnPlay then
+                                    clickUI(btnPlay)
+                                    task.wait(0.5) -- Небольшая пауза для открытия вкладки карты
+                                end
+                                
+                                -- 2. Ищем и нажимаем кнопку SPAWN
+                                local mapFrame = menuGui and menuGui:FindFirstChild("Map")
+                                local btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
+                                if btnSpawn then
+                                    clickUI(btnSpawn)
+                                    task.wait(2.0) -- Твое жесткое условие: ждем 2 секунды после нажатия кнопки Спавн
                                 end
                             end
                             
-                            if btnSpawn then
-                                clickUI(btnSpawn) -- Кликаем
-                                task.wait(2.0)    -- Твердое ожидание 2 секунды перед движением
+                            -- 3. СОБИРАЕМ ТЕЛО И ВКЛЮЧАЕМ ЛИФТ НАВЕРХ
+                            myChar = getCharacter(LocalPlayer.Name)
+                            myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                            hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                            
+                            if myHrp and hum and hum.Health > 0 then
+                                local startPos = myHrp.Position
+                                local endPos = pos + Vector3.new(0, 4, 0)
+                                local duration = 2.0 
+                                local startClock = os.clock()
                                 
-                                -- ШАГ 2: СОБИРАЕМ ДАННЫЕ НОВОГО ТЕЛА И ВКЛЮЧАЕМ ЛИФТ ДО ПЛАТФОРМЫ
-                                myChar = getCharacter(LocalPlayer.Name)
-                                myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                
-                                if myHrp and hum and hum.Health > 0 then
-                                    local startPos = myHrp.Position
-                                    local endPos = pos + Vector3.new(0, 4, 0)
-                                    local duration = 2.0 
-                                    local startClock = os.clock()
+                                -- Скользим строго на платформу
+                                while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
+                                    local t = (os.clock() - startClock) / duration
+                                    myChar = getCharacter(LocalPlayer.Name)
+                                    myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                    hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                                     
-                                    while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
-                                        local t = (os.clock() - startClock) / duration
-                                        myChar = getCharacter(LocalPlayer.Name)
-                                        myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                        hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                        
-                                        if myHrp and hum and hum.Health > 0 then
-                                            myHrp.Velocity = Vector3.new(0, 0, 0)
-                                            myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
-                                        end
-                                        task.wait(0.01)
+                                    if myHrp and hum and hum.Health > 0 then
+                                        myHrp.Velocity = Vector3.new(0, 0, 0)
+                                        myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
                                     end
+                                    task.wait(0.01)
                                 end
-                            else
-                                task.wait(0.5) -- Кнопка еще не появилась, ждем отрисовки меню
                             end
                         end
                         task.wait(0.1)
