@@ -6,8 +6,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm V8",
-   LoadingTitle = "G-Cells Perfect Click Edition",
+   Name = "⚔️ Kaiju Alpha Script | Farm V9",
+   LoadingTitle = "G-Cells Anti-Collision Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -118,31 +118,22 @@ local function createFarmPlatform()
     return farmPosition
 end
 
--- === ПРОВЕРКА: РЕАЛЬНО ЛИ КНОПКА НА ЭКРАНЕ ===
 local function isClickable(btn)
     if not btn or not btn:IsDescendantOf(game) then return false end
-    
-    -- Проверка базовой видимости в иерархии
     local current = btn
     while current and current:IsA("GuiObject") do
         if not current.Visible then return false end
         current = current.Parent
     end
-    
-    -- Проверка физических координат (не спрятана ли анимацией за экран)
     local pos = btn.AbsolutePosition
     local size = btn.AbsoluteSize
     if size.X <= 0 or size.Y <= 0 then return false end
     if pos.Y < 0 or pos.X < 0 then return false end 
-    
     return true
 end
 
--- === СТАБИЛЬНЫЙ КЛИКЕР ===
 local function clickUI(guiObject)
     if not guiObject then return end
-    
-    -- Ждем микро-паузу, пока кнопка закончит лететь по экрану
     local lastPos = guiObject.AbsolutePosition
     task.wait(0.03)
     local checkAttempts = 0
@@ -163,7 +154,6 @@ local function clickUI(guiObject)
         local inset = GuiService:GetGuiInset()
         local absPos = guiObject.AbsolutePosition
         local absSize = guiObject.AbsoluteSize
-        
         local centerX = absPos.X + absSize.X / 2
         local centerY = absPos.Y + absSize.Y / 2 + inset.Y
 
@@ -181,8 +171,8 @@ local function pressKeyboardKey(keyCode)
     end)
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Скрипт автоматически бьёт выбранными кнопками, когда цель на платформе, и спамит R+T, пока её нет."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Логика кликов переписана. Теперь скрипт определяет кнопки по их реальным координатам на экране, игнорируя баги анимаций."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Персонажи теперь разведены по разным краям платформы и развернуты лицами друг к другу, чтобы не толкаться физикой."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Твой персонаж теперь летит на выделенную противоположную точку платформы. Никаких вылетов в космос."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -232,6 +222,10 @@ FarmToggle = Tab:CreateToggle({
 
         if farmActive then
             local pos = createFarmPlatform()
+            
+            -- Точки позиционирования (разводим игроков на 10 студов друг от друга)
+            local p1Pos = pos + Vector3.new(0, 3.5, -5)
+            local p2Pos = pos + Vector3.new(0, 3.5, 5)
 
             if sharedRole == "Игрок 1 (Кому помогают)" then
                 task.spawn(function()
@@ -243,8 +237,9 @@ FarmToggle = Tab:CreateToggle({
                         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                         
                         if myHrp and myHrp.Parent then
+                            -- Фиксируем Игрока 1 лицом к Игроку 2
                             myHrp.Velocity = Vector3.new(0, 0, 0)
-                            myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
+                            myHrp.CFrame = CFrame.lookAt(p1Pos, Vector3.new(p2Pos.X, p1Pos.Y, p2Pos.Z))
                             
                             local targetDetected = false
                             local liveFolder = game.Workspace:FindFirstChild("Live")
@@ -256,6 +251,7 @@ FarmToggle = Tab:CreateToggle({
                                         local entHum = entity:FindFirstChildOfClass("Humanoid")
                                         
                                         if entHrp and entHum and entHum.Health > 0 then
+                                            -- Проверяем радиус всей платформы относительно центра
                                             if (entHrp.Position - pos).Magnitude < 35 then
                                                 targetDetected = true
                                                 break 
@@ -316,8 +312,9 @@ FarmToggle = Tab:CreateToggle({
                         end
                         
                         if isOnPlatform and hum and hum.Health > 0 then
+                            -- Фиксируем Игрока 2 на его законном месте лицом к Игроку 1
                             myHrp.Velocity = Vector3.new(0, 0, 0)
-                            myHrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
+                            myHrp.CFrame = CFrame.lookAt(p2Pos, Vector3.new(p1Pos.X, p2Pos.Y, p1Pos.Z))
                             task.wait(0.1)
                         else
                             local pg = LocalPlayer:FindFirstChild("PlayerGui")
@@ -331,19 +328,17 @@ FarmToggle = Tab:CreateToggle({
                                 local mapFrame = menuFrame:FindFirstChild("Map")
                                 local btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
                                 
-                                -- ПРИОРИТЕТ СМЕРТИ: Если на экране физически доступен Spawn — жмем его без лишних разговоров
                                 if isClickable(btnSpawn) then
                                     clickUI(btnSpawn)
-                                    task.wait(2.0) -- Даем персонажу прогрузиться
+                                    task.wait(2.0)
                                     
-                                    -- Полёт на платформу
+                                    -- Полёт на свою противоположную точку
                                     myChar = getMyCharacter()
                                     myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                                     hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
                                     
                                     if myHrp and hum and hum.Health > 0 then
                                         local startPos = myHrp.Position
-                                        local endPos = pos + Vector3.new(0, 4, 0)
                                         local duration = 2.0 
                                         local startClock = os.clock()
                                         
@@ -355,13 +350,14 @@ FarmToggle = Tab:CreateToggle({
                                             
                                             if myHrp and hum and hum.Health > 0 then
                                                 myHrp.Velocity = Vector3.new(0, 0, 0)
-                                                myHrp.CFrame = CFrame.new(startPos:Lerp(endPos, t))
+                                                local currentPos = startPos:Lerp(p2Pos, t)
+                                                -- Во время полета держим направление взгляда на Игрока 1
+                                                myHrp.CFrame = CFrame.lookAt(currentPos, Vector3.new(p1Pos.X, currentPos.Y, p1Pos.Z))
                                             end
                                             task.wait(0.01)
                                         end
                                     end
                                     
-                                -- Если Spawn недоступен, но мы видим главную кнопку Play — прожимаем её
                                 elseif isClickable(btnPlay) then
                                     clickUI(btnPlay)
                                     task.wait(0.3)
