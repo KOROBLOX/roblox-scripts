@@ -6,8 +6,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm V7",
-   LoadingTitle = "G-Cells Accurate Click Edition",
+   Name = "⚔️ Kaiju Alpha Script | Farm V8",
+   LoadingTitle = "G-Cells Perfect Click Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -118,21 +118,40 @@ local function createFarmPlatform()
     return farmPosition
 end
 
--- === УЛЬТИМАТИВНЫЙ АНТИ-АНИМАЦИОННЫЙ КЛИКЕР ===
-local function clickUI(guiObject)
-    if not guiObject or not guiObject.IsAncestorOf or not guiObject:IsDescendantOf(game) then return end
+-- === ПРОВЕРКА: РЕАЛЬНО ЛИ КНОПКА НА ЭКРАНЕ ===
+local function isClickable(btn)
+    if not btn or not btn:IsDescendantOf(game) then return false end
     
-    -- Стабилизатор: ждем пока кнопка закончит двигаться по экрану
+    -- Проверка базовой видимости в иерархии
+    local current = btn
+    while current and current:IsA("GuiObject") do
+        if not current.Visible then return false end
+        current = current.Parent
+    end
+    
+    -- Проверка физических координат (не спрятана ли анимацией за экран)
+    local pos = btn.AbsolutePosition
+    local size = btn.AbsoluteSize
+    if size.X <= 0 or size.Y <= 0 then return false end
+    if pos.Y < 0 or pos.X < 0 then return false end 
+    
+    return true
+end
+
+-- === СТАБИЛЬНЫЙ КЛИКЕР ===
+local function clickUI(guiObject)
+    if not guiObject then return end
+    
+    -- Ждем микро-паузу, пока кнопка закончит лететь по экрану
     local lastPos = guiObject.AbsolutePosition
-    task.wait(0.05)
+    task.wait(0.03)
     local checkAttempts = 0
-    while guiObject.AbsolutePosition ~= lastPos and checkAttempts < 10 do
+    while guiObject.AbsolutePosition ~= lastPos and checkAttempts < 5 do
         lastPos = guiObject.AbsolutePosition
-        task.wait(0.05)
+        task.wait(0.03)
         checkAttempts = checkAttempts + 1
     end
 
-    -- Виртуальный клик силами API движка
     pcall(function()
         if firesignal then
             firesignal(guiObject.MouseButton1Click)
@@ -140,7 +159,6 @@ local function clickUI(guiObject)
         end
     end)
     
-    -- Физический точный клик мыши с динамическим отступом TopBar
     pcall(function()
         local inset = GuiService:GetGuiInset()
         local absPos = guiObject.AbsolutePosition
@@ -164,7 +182,7 @@ local function pressKeyboardKey(keyCode)
 end
 
 Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Скрипт автоматически бьёт выбранными кнопками, когда цель на платформе, и спамит R+T, пока её нет."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Скрипт полностью исправлен. Клик по кнопкам адаптируется под любые экраны и ждёт окончания анимаций интерфейса."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Логика кликов переписана. Теперь скрипт определяет кнопки по их реальным координатам на экране, игнорируя баги анимаций."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -313,17 +331,12 @@ FarmToggle = Tab:CreateToggle({
                                 local mapFrame = menuFrame:FindFirstChild("Map")
                                 local btnSpawn = mapFrame and mapFrame:FindFirstChild("Spawn")
                                 
-                                -- Шаг А: Жмём Play, только если экран выбора карты ЕЩЕ НЕ открыт
-                                if btnPlay and btnPlay.AbsoluteSize.X > 0 and (not mapFrame or not mapFrame.Visible) then
-                                    clickUI(btnPlay)
-                                    task.wait(0.2)
-                                
-                                -- Шаг Б: Жмём Spawn, только если экран выбора карты РЕАЛЬНО открылся и виден
-                                elseif btnSpawn and btnSpawn.AbsoluteSize.X > 0 and mapFrame.Visible then
+                                -- ПРИОРИТЕТ СМЕРТИ: Если на экране физически доступен Spawn — жмем его без лишних разговоров
+                                if isClickable(btnSpawn) then
                                     clickUI(btnSpawn)
-                                    task.wait(2.0) -- Железные 2 секунды ожидания прогрузки персонажа
+                                    task.wait(2.0) -- Даем персонажу прогрузиться
                                     
-                                    -- Шаг В: Полёт
+                                    -- Полёт на платформу
                                     myChar = getMyCharacter()
                                     myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                                     hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
@@ -347,6 +360,11 @@ FarmToggle = Tab:CreateToggle({
                                             task.wait(0.01)
                                         end
                                     end
+                                    
+                                -- Если Spawn недоступен, но мы видим главную кнопку Play — прожимаем её
+                                elseif isClickable(btnPlay) then
+                                    clickUI(btnPlay)
+                                    task.wait(0.3)
                                 else
                                     task.wait(0.1)
                                 end
