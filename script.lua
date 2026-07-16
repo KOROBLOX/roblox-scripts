@@ -6,8 +6,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm V9",
-   LoadingTitle = "G-Cells Anti-Collision Edition",
+   Name = "⚔️ Kaiju Alpha Script | Farm V10",
+   LoadingTitle = "G-Cells Instant Teleport Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -171,8 +171,8 @@ local function pressKeyboardKey(keyCode)
     end)
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Персонажи теперь разведены по разным краям платформы и развернуты лицами друг к другу, чтобы не толкаться физикой."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Твой персонаж теперь летит на выделенную противоположную точку платформы. Никаких вылетов в космос."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Персонажи разведены по краям платформы лицом друг к другу."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Полёты отключены. Теперь скрипт мгновенно телепортирует тебя на платформу сразу после спавна, исключая падения в бездну."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -330,32 +330,26 @@ FarmToggle = Tab:CreateToggle({
                                 
                                 if isClickable(btnSpawn) then
                                     clickUI(btnSpawn)
-                                    task.wait(2.0)
                                     
-                                    -- Полёт на свою противоположную точку
-                                    myChar = getMyCharacter()
-                                    myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                    hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                    
-                                    if myHrp and hum and hum.Health > 0 then
-                                        local startPos = myHrp.Position
-                                        local duration = 2.0 
-                                        local startClock = os.clock()
-                                        
-                                        while farmActive and (os.clock() - startClock) < duration and hum.Health > 0 do
-                                            local t = (os.clock() - startClock) / duration
-                                            myChar = getMyCharacter()
-                                            myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                                            hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-                                            
-                                            if myHrp and hum and hum.Health > 0 then
-                                                myHrp.Velocity = Vector3.new(0, 0, 0)
-                                                local currentPos = startPos:Lerp(p2Pos, t)
-                                                -- Во время полета держим направление взгляда на Игрока 1
-                                                myHrp.CFrame = CFrame.lookAt(currentPos, Vector3.new(p1Pos.X, currentPos.Y, p1Pos.Z))
-                                            end
-                                            task.wait(0.01)
+                                    -- Динамический радар загрузки персонажа (не более 4 сек ожидания)
+                                    local spawned = false
+                                    local startTime = os.clock()
+                                    while farmActive and (os.clock() - startTime) < 4 do
+                                        myChar = getMyCharacter()
+                                        myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                        hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                                        if myHrp and hum and hum.Health > 0 then
+                                            spawned = true
+                                            break
                                         end
+                                        task.wait(0.05)
+                                    end
+                                    
+                                    -- МГНОВЕННЫЙ ТЕЛЕПОРТ БЕЗ ПАДЕНИЙ
+                                    if spawned then
+                                        myHrp.Velocity = Vector3.new(0, 0, 0)
+                                        myHrp.CFrame = CFrame.lookAt(p2Pos, Vector3.new(p1Pos.X, p2Pos.Y, p1Pos.Z))
+                                        task.wait(0.1) -- Даем игре зарегистрировать позицию
                                     end
                                     
                                 elseif isClickable(btnPlay) then
