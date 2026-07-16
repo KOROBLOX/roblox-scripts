@@ -6,8 +6,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm V10",
-   LoadingTitle = "G-Cells Instant Teleport Edition",
+   Name = "⚔️ Kaiju Alpha Script | Farm V11",
+   LoadingTitle = "G-Cells Safe Spawn Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -172,7 +172,7 @@ local function pressKeyboardKey(keyCode)
 end
 
 Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Персонажи разведены по краям платформы лицом друг к другу."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Полёты отключены. Теперь скрипт мгновенно телепортирует тебя на платформу сразу после спавна, исключая падения в бездну."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Добавлена задержка 2.4 сек после нажатия кнопки Spawn. Твой кайдзю успеет полностью прогрузить свои кости и велды перед телепортацией."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -223,7 +223,6 @@ FarmToggle = Tab:CreateToggle({
         if farmActive then
             local pos = createFarmPlatform()
             
-            -- Точки позиционирования (разводим игроков на 10 студов друг от друга)
             local p1Pos = pos + Vector3.new(0, 3.5, -5)
             local p2Pos = pos + Vector3.new(0, 3.5, 5)
 
@@ -237,7 +236,6 @@ FarmToggle = Tab:CreateToggle({
                         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                         
                         if myHrp and myHrp.Parent then
-                            -- Фиксируем Игрока 1 лицом к Игроку 2
                             myHrp.Velocity = Vector3.new(0, 0, 0)
                             myHrp.CFrame = CFrame.lookAt(p1Pos, Vector3.new(p2Pos.X, p1Pos.Y, p2Pos.Z))
                             
@@ -251,7 +249,6 @@ FarmToggle = Tab:CreateToggle({
                                         local entHum = entity:FindFirstChildOfClass("Humanoid")
                                         
                                         if entHrp and entHum and entHum.Health > 0 then
-                                            -- Проверяем радиус всей платформы относительно центра
                                             if (entHrp.Position - pos).Magnitude < 35 then
                                                 targetDetected = true
                                                 break 
@@ -312,7 +309,6 @@ FarmToggle = Tab:CreateToggle({
                         end
                         
                         if isOnPlatform and hum and hum.Health > 0 then
-                            -- Фиксируем Игрока 2 на его законном месте лицом к Игроку 1
                             myHrp.Velocity = Vector3.new(0, 0, 0)
                             myHrp.CFrame = CFrame.lookAt(p2Pos, Vector3.new(p1Pos.X, p2Pos.Y, p1Pos.Z))
                             task.wait(0.1)
@@ -331,10 +327,13 @@ FarmToggle = Tab:CreateToggle({
                                 if isClickable(btnSpawn) then
                                     clickUI(btnSpawn)
                                     
-                                    -- Динамический радар загрузки персонажа (не более 4 сек ожидания)
+                                    -- ЖЁСТКАЯ ЗАДЕРЖКА 2.4 СЕКУНДЫ (Даем кайдзю собраться в мире игры)
+                                    task.wait(2.4)
+                                    
+                                    -- Начинаем искать загруженного персонажа
                                     local spawned = false
                                     local startTime = os.clock()
-                                    while farmActive and (os.clock() - startTime) < 4 do
+                                    while farmActive and (os.clock() - startTime) < 3 do
                                         myChar = getMyCharacter()
                                         myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                                         hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
@@ -345,11 +344,11 @@ FarmToggle = Tab:CreateToggle({
                                         task.wait(0.05)
                                     end
                                     
-                                    -- МГНОВЕННЫЙ ТЕЛЕПОРТ БЕЗ ПАДЕНИЙ
+                                    -- Безопасный телепорт
                                     if spawned then
                                         myHrp.Velocity = Vector3.new(0, 0, 0)
                                         myHrp.CFrame = CFrame.lookAt(p2Pos, Vector3.new(p1Pos.X, p2Pos.Y, p1Pos.Z))
-                                        task.wait(0.1) -- Даем игре зарегистрировать позицию
+                                        task.wait(0.1)
                                     end
                                     
                                 elseif isClickable(btnPlay) then
