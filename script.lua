@@ -6,8 +6,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "⚔️ Kaiju Alpha Script | Farm V11",
-   LoadingTitle = "G-Cells Safe Spawn Edition",
+   Name = "⚔️ Kaiju Alpha Script | Farm V12",
+   LoadingTitle = "G-Cells Optimized Edition",
    LoadingSubtitle = "Loading...",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
@@ -171,8 +171,8 @@ local function pressKeyboardKey(keyCode)
     end)
 end
 
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Персонажи разведены по краям платформы лицом друг к другу."})
-Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Добавлена задержка 2.4 сек после нажатия кнопки Spawn. Твой кайдзю успеет полностью прогрузить свои кости и велды перед телепортацией."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 1", Content = "Включи тумблер. Спам кнопок R/T вырезан. Персонаж просто ждет цель или окончания кулдауна."})
+Tab:CreateParagraph({Title = "ℹ️ Инструкция Игрок 2", Content = "Все задержки спавна и умные клики по UI сохранены без изменений."})
 
 Tab:CreateDropdown({
    Name = "Ваша роль",
@@ -278,17 +278,13 @@ FarmToggle = Tab:CreateToggle({
                                     end
                                     task.wait(0.04)
                                 else
-                                    pressKeyboardKey(Enum.KeyCode.R)
-                                    task.wait(0.01)
-                                    pressKeyboardKey(Enum.KeyCode.T)
-                                    task.wait(0.05)
+                                    -- Просто ждем окончания таймера кулдауна без спама R/T
+                                    task.wait(0.1)
                                 end
                             else
+                                -- Цели нет на платформе — сбрасываем трекер и ждем без спама R/T
                                 targetTracked = false
-                                pressKeyboardKey(Enum.KeyCode.R)
-                                task.wait(0.01)
-                                pressKeyboardKey(Enum.KeyCode.T)
-                                task.wait(0.05)
+                                task.wait(0.1)
                             end
                         else
                             task.wait(0.1)
@@ -327,10 +323,8 @@ FarmToggle = Tab:CreateToggle({
                                 if isClickable(btnSpawn) then
                                     clickUI(btnSpawn)
                                     
-                                    -- ЖЁСТКАЯ ЗАДЕРЖКА 2.4 СЕКУНДЫ (Даем кайдзю собраться в мире игры)
                                     task.wait(2.4)
                                     
-                                    -- Начинаем искать загруженного персонажа
                                     local spawned = false
                                     local startTime = os.clock()
                                     while farmActive and (os.clock() - startTime) < 3 do
@@ -344,7 +338,6 @@ FarmToggle = Tab:CreateToggle({
                                         task.wait(0.05)
                                     end
                                     
-                                    -- Безопасный телепорт
                                     if spawned then
                                         myHrp.Velocity = Vector3.new(0, 0, 0)
                                         myHrp.CFrame = CFrame.lookAt(p2Pos, Vector3.new(p1Pos.X, p2Pos.Y, p1Pos.Z))
